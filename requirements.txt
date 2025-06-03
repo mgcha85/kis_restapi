@@ -1,0 +1,5 @@
+requests
+SQLAlchemy
+python-dotenv
+PyYAML
+pydantic
