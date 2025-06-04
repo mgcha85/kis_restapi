@@ -13,7 +13,7 @@ from src.db.models import OrderList, HoldList
 from src.order_execution_models import ExecutionInquiryResponse
 
 # Header 검증을 위해 RequestHeader 모델 재사용
-from src.order_models import RequestHeader  
+from src.orders.order_models import RequestHeader  
 
 
 # ─────────────────────────────────────────────────────────────────────────
