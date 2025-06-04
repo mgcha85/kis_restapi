@@ -1,4 +1,4 @@
-# src/models.py
+# src/order_models.py
 
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -68,8 +68,7 @@ class RequestHeader(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
-        # alias를 “content-type”으로 썼을 때 .dict(by_alias=True)로 JSON 직렬화 가능
-        # ex) header_model.dict(by_alias=True, exclude_none=True)
+        allow_population_by_alias = True
 
 
 # -------------------------------------------
@@ -80,8 +79,8 @@ class RequestBody(BaseModel):
     ACNT_PRDT_CD: str = Field(..., description="계좌상품코드 (뒤 2자리)")
     OVRS_EXCG_CD: str = Field(..., description="해외거래소코드 (예: NASD, NYSE)")
     PDNO: str = Field(..., description="상품번호 (종목코드, 예: AAPL)")
-    ORD_QTY: str = Field(..., description="주문수량 (실수는 허용되지 않음)")
-    OVRS_ORD_UNPR: str = Field(..., description="해외주문단가 (지정가 주문 시 1주당 가격)")
+    ORD_QTY: str = Field(..., description="주문수량 (정수로 전달)")
+    OVRS_ORD_UNPR: str = Field(..., description="해외주문단가 (지정가 주문 시 1주당 가격, “0”도 가능)")
     CTAC_TLNO: Optional[str] = Field(
         default=None,
         description="연락전화번호 (옵션)"
@@ -92,46 +91,30 @@ class RequestBody(BaseModel):
     )
     SLL_TYPE: Optional[str] = Field(
         default=None,
-        description="판매유형 (제거: 매수, 00: 매도 등)"
+        description="판매유형 (매도일 때 '00', 매수 시 None)"
     )
     ORD_SVR_DVSN_CD: str = Field(..., description="주문서버구분코드 (항상 '0')")
     ORD_DVSN: str = Field(..., description="주문구분 (예: '00' 지정가)")
     START_TIME: Optional[str] = Field(
         default=None,
-        description="TWAP/VWAP 시작시간 (YYMMDDHHMMSS)"
+        description="TWAP/VWAP 시작시간 (YYMMDDHHMMSS, 옵션)"
     )
     END_TIME: Optional[str] = Field(
         default=None,
-        description="TWAP/VWAP 종료시간 (YYMMDDHHMMSS)"
+        description="TWAP/VWAP 종료시간 (YYMMDDHHMMSS, 옵션)"
     )
     ALGO_ORD_TMD_DVSN_CD: Optional[str] = Field(
         default=None,
-        description="알고리즘 주문 시간 구분코드 (00, 02 등)"
+        description="알고리즘 주문 시간 구분코드 (00, 02 등, 옵션)"
     )
 
     class Config:
-        # JSON을 그대로 모델로 넣을 때 대문자 필드명이 그대로 매핑되도록 함
         allow_population_by_field_name = True
-        # Pydantic이 JSON key를 CamelCase나 대문자 형식으로 쓸 수 있도록 허용
+        allow_population_by_alias = True
 
 
 # -------------------------------------------
-# 3) 응답 헤더 모델 (ResponseHeader)
-# -------------------------------------------
-class ResponseHeader(BaseModel):
-    content_type: str = Field(
-        ..., alias="content-type", description="컨텐츠타입 (application/json; charset=UTF-8)"
-    )
-    tr_id: str = Field(..., description="거래ID")
-    tr_cont: str = Field(..., description="연속 거래 여부")
-    gt_uid: str = Field(..., description="법인 전용 거래고유번호")
-
-    class Config:
-        allow_population_by_field_name = True
-
-
-# -------------------------------------------
-# 4) 응답 바디 중첩 모델 (ResponseBodyOutput)
+# 3) 주문 응답 바디 중첩 모델 (ResponseBodyOutput)
 # -------------------------------------------
 class ResponseBodyOutput(BaseModel):
     KRX_FWDG_ORD_ORGNO: str = Field(..., description="한국거래소 전송주문조직번호")
@@ -140,10 +123,11 @@ class ResponseBodyOutput(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
+        allow_population_by_alias = True
 
 
 # -------------------------------------------
-# 5) 응답 바디 모델 (ResponseBody)
+# 4) 주문 응답 바디 모델 (ResponseBody)
 # -------------------------------------------
 class ResponseBody(BaseModel):
     rt_cd: str = Field(..., description="성공 실패 여부 (0: 성공, 그 외: 실패)")
@@ -153,5 +137,4 @@ class ResponseBody(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
-
-
+        allow_population_by_alias = True

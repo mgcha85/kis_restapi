@@ -5,3 +5,20 @@ path:
   real: "https://openapi.koreainvestment.com:9443"
   mock: "https://openapivts.koreainvestment.com:29443"
   api: "/uapi/overseas-stock/v1/trading/order"
+
+account:
+  CANO: "12345678"        # 종합계좌번호 앞 8자리
+  ACNT_PRDT_CD: "01"      # 계좌상품코드 뒤 2자리
+  OVRS_EXCG_CD: "NASD"    # 해외거래소코드 (예: NASD)
+  TR_CRCY_CD: "USD"       # 거래통화코드 (예: USD)
+
+
+strategy:
+  weights:                 # 리밸런싱 대상 종목 및 목표 비율
+    TQQQ: 0.3
+    SOXL: 0.2
+    SGOV: 0.1
+    TSLA: 0.1
+    NVDA: 0.1
+    MSFO: 0.1
+    FEPI: 0.1
