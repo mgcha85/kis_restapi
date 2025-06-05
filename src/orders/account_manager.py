@@ -22,7 +22,7 @@ from src.orders.order_models import RequestHeader  # 헤더용 모델만 재사�
 # config.yaml 로드
 # ─────────────────────────────────────────────────────────────────────────
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.yaml")
+CONFIG_PATH = os.path.join(BASE_DIR, "..", "config", "config.yaml")
 
 
 def _load_config() -> dict:
@@ -143,6 +143,13 @@ class AccountManager:
         self.session.close()
 
 
+def _load_config() -> dict:
+    if not os.path.exists(CONFIG_PATH):
+        raise FileNotFoundError(f"설정 파일을 찾을 수 없습니다: {CONFIG_PATH}")
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
 if __name__ == "__main__":
     # 로깅 설정
     logging.basicConfig(
@@ -150,6 +157,9 @@ if __name__ == "__main__":
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
     logger = logging.getLogger("account_manager_test")
+
+    cfg = _load_config()
+    trading_cfg      = cfg.get("trading", {})
 
     # .env에서 api_key, app_secret, token, use_mock 읽기
     api_key    = os.getenv("KIS_API_KEY")
@@ -188,6 +198,7 @@ if __name__ == "__main__":
         OVRS_EXCG_CD=OVRS_EXCG_CD,
         TR_CRCY_CD=TR_CRCY_CD
     )
+    print(balance_resp)
 
     if balance_resp:
         # output1(종목별 잔고)

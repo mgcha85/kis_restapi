@@ -20,7 +20,7 @@ from src.orders.order_models import RequestHeader
 # config.yaml 로드 (trading.use_mock, path.real, path.mock, execution api path)
 # ─────────────────────────────────────────────────────────────────────────
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.yaml")
+CONFIG_PATH = os.path.join(BASE_DIR, "..", "config", "config.yaml")
 
 
 def _load_config() -> dict:
