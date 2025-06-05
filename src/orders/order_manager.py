@@ -216,3 +216,62 @@ class OrderManager:
 
     def close(self):
         self.session.close()
+
+
+if __name__ == "__main__":
+    # 로깅 설정
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    logger = logging.getLogger("order_manager_test")
+
+    # config.yaml에서 api_key, app_secret 읽기
+    try:
+        cfg = _load_config()
+        trading_cfg = cfg.get("trading", {})
+        api_key    = os.getenv("KIS_API_KEY")
+        app_secret = os.getenv("KIS_APP_SECRET")
+        token      = os.getenv("KIS_OAUTH_TOKEN")
+        use_mock   = trading_cfg.get("use_mock", False)
+    except Exception as e:
+        logger.exception(f"설정 로드 실패: {e}")
+        exit(1)
+
+    # OrderManager 인스턴스 생성
+    order_mgr = OrderManager(api_key=api_key, app_secret=app_secret, token=token, use_mock=use_mock)
+
+    # 테스트용 주문 파라미터 (예시)
+    CANO         = cfg["account"]["CANO"]
+    ACNT_PRDT_CD = cfg["account"]["ACNT_PRDT_CD"]
+    OVRS_EXCG_CD = cfg["account"]["OVRS_EXCG_CD"]
+    PDNO         = "AAPL"         # 예시 종목코드
+    ORD_QTY      = 1              # 1주 주문
+    OVRS_ORD_UNPR = 150           # 지정가 150 USD
+    order_type   = "테스트매수"
+    name         = "AAPL"
+    qty          = ORD_QTY
+    price        = OVRS_ORD_UNPR
+
+    logger.info("테스트 매수 주문 생성 시도")
+    order_id = order_mgr.create_order(
+        is_buy=True,
+        CANO=CANO,
+        ACNT_PRDT_CD=ACNT_PRDT_CD,
+        OVRS_EXCG_CD=OVRS_EXCG_CD,
+        PDNO=PDNO,
+        ORD_QTY=ORD_QTY,
+        OVRS_ORD_UNPR=OVRS_ORD_UNPR,
+        order_type=order_type,
+        name=name,
+        qty=qty,
+        price=price
+    )
+
+    if order_id:
+        logger.info(f"테스트 매수 주문 생성 성공: {order_id}")
+    else:
+        logger.error("테스트 매수 주문 생성 실패")
+
+    # OrderManager 정리
+    order_mgr.close()

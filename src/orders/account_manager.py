@@ -141,3 +141,74 @@ class AccountManager:
 
     def close(self):
         self.session.close()
+
+
+if __name__ == "__main__":
+    # 로깅 설정
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    logger = logging.getLogger("account_manager_test")
+
+    # .env에서 api_key, app_secret, token, use_mock 읽기
+    api_key    = os.getenv("KIS_API_KEY")
+    app_secret = os.getenv("KIS_APP_SECRET")
+    token      = os.getenv("KIS_OAUTH_TOKEN")
+    use_mock   = trading_cfg.get("use_mock", False)
+
+    if not api_key or not app_secret or not token:
+        logger.error(".env에 KIS_API_KEY, KIS_APP_SECRET, KIS_OAUTH_TOKEN이 모두 설정되어야 합니다.")
+        exit(1)
+
+    # config.yaml에서 계좌 정보 로드
+    try:
+        cfg = _load_config()
+        account_cfg = cfg.get("account", {})
+        CANO         = account_cfg.get("CANO")
+        ACNT_PRDT_CD = account_cfg.get("ACNT_PRDT_CD")
+        OVRS_EXCG_CD = account_cfg.get("OVRS_EXCG_CD")
+        TR_CRCY_CD   = account_cfg.get("TR_CRCY_CD")
+    except Exception as e:
+        logger.exception(f"config.yaml에서 계좌 정보 로드 실패: {e}")
+        exit(1)
+
+    # AccountManager 인스턴스 생성
+    acct_mgr = AccountManager(
+        api_key=api_key,
+        app_secret=app_secret,
+        token=token,
+        use_mock=use_mock
+    )
+
+    logger.info("잔고 조회 테스트 시작")
+    balance_resp = acct_mgr.get_balance(
+        CANO=CANO,
+        ACNT_PRDT_CD=ACNT_PRDT_CD,
+        OVRS_EXCG_CD=OVRS_EXCG_CD,
+        TR_CRCY_CD=TR_CRCY_CD
+    )
+
+    if balance_resp:
+        # output1(종목별 잔고)
+        logger.info("=== 종목별 잔고 (output1) ===")
+        for item in balance_resp.output1:
+            logger.info(
+                f"종목코드: {item.ovrs_pdno}, "
+                f"잔고수량: {item.ovrs_cblc_qty}, "
+                f"평가금액: {item.ovrs_stck_evlu_amt}"
+            )
+
+        # output2(요약)
+        logger.info("=== 잔고 요약 (output2) ===")
+        out2: ResponseBodyOutput2 = balance_resp.output2
+        logger.info(
+            f"외화매입금액합계1: {out2.frcr_pchs_amt1}, "
+            f"해외실현손익금액: {out2.ovrs_rlzt_pfls_amt}, "
+            f"해외총손익: {out2.ovrs_tot_pfls}, "
+            f"총평가손익금액: {out2.tot_evlu_pfls_amt}"
+        )
+    else:
+        logger.error("잔고 조회 실패")
+
+    acct_mgr.close()

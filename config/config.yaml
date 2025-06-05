@@ -7,7 +7,7 @@ path:
   api: "/uapi/overseas-stock/v1/trading/order"
 
 account:
-  CANO: "12345678"        # 종합계좌번호 앞 8자리
+  CANO: "64076653"        # 종합계좌번호 앞 8자리
   ACNT_PRDT_CD: "01"      # 계좌상품코드 뒤 2자리
   OVRS_EXCG_CD: "NASD"    # 해외거래소코드 (예: NASD)
   TR_CRCY_CD: "USD"       # 거래통화코드 (예: USD)
