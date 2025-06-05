@@ -1,10 +1,11 @@
 trading:
-  use_mock: true
+  use_mock: false
 
 path:
   real: "https://openapi.koreainvestment.com:9443"
   mock: "https://openapivts.koreainvestment.com:29443"
   api: "/uapi/overseas-stock/v1/trading/order"
+  price: "/uapi/overseas-price/v1/quotations/price"
 
 account:
   CANO: "64076653"        # 종합계좌번호 앞 8자리

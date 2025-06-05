@@ -1,63 +1,29 @@
-# orders/order_manager.py
-
 import logging
 import uuid
 from datetime import datetime
 import requests
-import os
-import yaml
+from typing import Optional
 
 from pydantic import ValidationError
 
 from src.db.db import SessionLocal
 from src.db.models import OrderList
-
-# ▶ 분리된 Pydantic 모델 import
 from src.orders.order_models import RequestHeader, RequestBody, ResponseBody as OrderResponseBody
-
-# ─────────────────────────────────────────────────────────────────────────
-# config.yaml 로드
-# ─────────────────────────────────────────────────────────────────────────
-BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.yaml")
+from src.orders.base_manager import BaseManager
 
 
-def _load_config() -> dict:
-    if not os.path.exists(CONFIG_PATH):
-        raise FileNotFoundError(f"설정 파일을 찾을 수 없습니다: {CONFIG_PATH}")
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+class OrderManager(BaseManager):
+    """
+    해외주식 주문 생성/정정/취소 기능(v1_해외주식-001).
+    """
 
+    def __init__(self):
+        super().__init__()  # BaseManager 초기화
 
-try:
-    cfg = _load_config()
-    trading_cfg      = cfg.get("trading", {})
-    use_mock_default = trading_cfg.get("use_mock", False)
-
-    path_cfg    = cfg.get("path", {})
-    DOMAIN_REAL = path_cfg.get("real", "https://openapi.koreainvestment.com:9443")
-    DOMAIN_MOCK = path_cfg.get("mock", "https://openapivts.koreainvestment.com:29443")
-    API_PATH    = path_cfg.get("api", "/uapi/overseas-stock/v1/trading/order")
-
-except Exception as e:
-    logging.getLogger(__name__).warning(
-        f"config.yaml 로드 실패 ({e}), 기본값으로 실전 도메인 및 주문 API 경로 사용"
-    )
-    use_mock_default = False
-    DOMAIN_REAL = "https://openapi.koreainvestment.com:9443"
-    DOMAIN_MOCK = "https://openapivts.koreainvestment.com:29443"
-    API_PATH    = "/uapi/overseas-stock/v1/trading/order"
-
-
-class OrderManager:
-    def __init__(self, api_key: str, app_secret: str, token: str, use_mock: bool = None):
-        self.api_key    = api_key
-        self.app_secret = app_secret
-        self.token      = token
-        self.use_mock   = use_mock_default if use_mock is None else use_mock
-
-        self.base_url = DOMAIN_MOCK if self.use_mock else DOMAIN_REAL
-        self.api_url  = f"{self.base_url}{API_PATH}"
+        # 주문 API 경로(config.yaml의 path.api) 사용
+        order_path = self.PATH_CFG.get("api", "/uapi/overseas-stock/v1/trading/order")
+        base = self.DOMAIN_MOCK if self.use_mock else self.DOMAIN_REAL
+        self.api_url = f"{base}{order_path}"
 
         self.session = SessionLocal()
         self.logger  = logging.getLogger(__name__)
@@ -98,14 +64,16 @@ class OrderManager:
         phone_number: str = None,
         ip_addr: str = None,
         gt_uid: str = None,
-    ) -> str:
+    ) -> Optional[str]:
+        """
+        해외주식 주문 API 호출 → DB에 저장 → order_id 반환
+        """
         order_id = str(uuid.uuid4())
         order_time = datetime.now()
 
-        # 1) TR ID 결정
         tr_id = self._build_tr_id(is_buy)
 
-        # 2) 헤더 검증용 Pydantic 모델 생성
+        # Header 검증용 Pydantic
         try:
             header_model = RequestHeader(
                 **{
@@ -114,20 +82,13 @@ class OrderManager:
                     "appkey": self.api_key,
                     "appsecret": self.app_secret,
                     "tr_id": tr_id,
-                    # 필요 시 추가 가능
-                    # "custtype": custtype,
-                    # "seq_no": seq_no,
-                    # "mac_address": mac_address,
-                    # "phone_number": phone_number,
-                    # "ip_addr": ip_addr,
-                    # "gt_uid": gt_uid,
                 }
             )
         except ValidationError as ve:
-            self.logger.error(f"RequestHeader 검증 실패: {ve.json()}")
+            self.logger.error(f"[OrderManager] RequestHeader 검증 실패: {ve.json()}")
             return None
 
-        # 3) 바디 검증용 Pydantic 모델 생성
+        # Body 검증용 Pydantic
         try:
             body_model = RequestBody(
                 CANO=CANO,
@@ -146,10 +107,10 @@ class OrderManager:
                 ALGO_ORD_TMD_DVSN_CD=ALGO_ORD_TMD_DVSN_CD,
             )
         except ValidationError as ve:
-            self.logger.error(f"RequestBody 검증 실패: {ve.json()}")
+            self.logger.error(f"[OrderManager] RequestBody 검증 실패: {ve.json()}")
             return None
 
-        # 4) 실제 API 호출
+        # HTTP 요청
         try:
             resp = requests.post(
                 self.api_url,
@@ -157,15 +118,15 @@ class OrderManager:
                 json=body_model.dict(by_alias=True, exclude_none=True)
             )
             data = resp.json()
-        except Exception as e:
-            self.logger.exception("주문 생성 중 HTTP 요청 에러 발생")
+        except Exception:
+            self.logger.exception("[OrderManager] 주문 생성 중 HTTP 요청 에러 발생")
             return None
 
-        # 5) 응답 검증 및 파싱
+        # Response 검증/파싱
         try:
             resp_model = OrderResponseBody.parse_obj(data)
         except ValidationError as ve:
-            self.logger.error(f"응답 파싱 실패: {ve.json()}")
+            self.logger.error(f"[OrderManager] 응답 파싱 실패: {ve.json()}")
             return None
 
         if resp_model.rt_cd == "0":
@@ -184,13 +145,13 @@ class OrderManager:
             try:
                 self.session.add(new_order)
                 self.session.commit()
-                self.logger.info(f"Order created successfully: {order_id}")
+                self.logger.info(f"[OrderManager] Order created successfully: {order_id}")
                 return order_id
-            except Exception as db_e:
-                self.logger.exception("DB 저장 중 에러 발생")
+            except Exception:
+                self.logger.exception("[OrderManager] DB 저장 중 에러 발생")
                 return None
         else:
-            self.logger.error(f"Order API Error (rt_cd={resp_model.rt_cd}, msg1={resp_model.msg1})")
+            self.logger.error(f"[OrderManager] Order API Error (rt_cd={resp_model.rt_cd}, msg1={resp_model.msg1})")
             return None
 
     def modify_order(self, order_id: str, new_qty: int, new_price: int) -> bool:
@@ -201,7 +162,7 @@ class OrderManager:
             self.session.commit()
             return True
         else:
-            self.logger.error(f"Order {order_id} not found")
+            self.logger.error(f"[OrderManager] Order {order_id} not found")
             return False
 
     def cancel_order(self, order_id: str) -> bool:
@@ -211,67 +172,8 @@ class OrderManager:
             self.session.commit()
             return True
         else:
-            self.logger.error(f"Order {order_id} not found")
+            self.logger.error(f"[OrderManager] Order {order_id} not found")
             return False
 
     def close(self):
         self.session.close()
-
-
-if __name__ == "__main__":
-    # 로깅 설정
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    )
-    logger = logging.getLogger("order_manager_test")
-
-    # config.yaml에서 api_key, app_secret 읽기
-    try:
-        cfg = _load_config()
-        trading_cfg = cfg.get("trading", {})
-        api_key    = os.getenv("KIS_API_KEY")
-        app_secret = os.getenv("KIS_APP_SECRET")
-        token      = os.getenv("KIS_OAUTH_TOKEN")
-        use_mock   = trading_cfg.get("use_mock", False)
-    except Exception as e:
-        logger.exception(f"설정 로드 실패: {e}")
-        exit(1)
-
-    # OrderManager 인스턴스 생성
-    order_mgr = OrderManager(api_key=api_key, app_secret=app_secret, token=token, use_mock=use_mock)
-
-    # 테스트용 주문 파라미터 (예시)
-    CANO         = cfg["account"]["CANO"]
-    ACNT_PRDT_CD = cfg["account"]["ACNT_PRDT_CD"]
-    OVRS_EXCG_CD = cfg["account"]["OVRS_EXCG_CD"]
-    PDNO         = "AAPL"         # 예시 종목코드
-    ORD_QTY      = 1              # 1주 주문
-    OVRS_ORD_UNPR = 150           # 지정가 150 USD
-    order_type   = "테스트매수"
-    name         = "AAPL"
-    qty          = ORD_QTY
-    price        = OVRS_ORD_UNPR
-
-    logger.info("테스트 매수 주문 생성 시도")
-    order_id = order_mgr.create_order(
-        is_buy=True,
-        CANO=CANO,
-        ACNT_PRDT_CD=ACNT_PRDT_CD,
-        OVRS_EXCG_CD=OVRS_EXCG_CD,
-        PDNO=PDNO,
-        ORD_QTY=ORD_QTY,
-        OVRS_ORD_UNPR=OVRS_ORD_UNPR,
-        order_type=order_type,
-        name=name,
-        qty=qty,
-        price=price
-    )
-
-    if order_id:
-        logger.info(f"테스트 매수 주문 생성 성공: {order_id}")
-    else:
-        logger.error("테스트 매수 주문 생성 실패")
-
-    # OrderManager 정리
-    order_mgr.close()
